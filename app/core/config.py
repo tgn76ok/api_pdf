@@ -1,5 +1,6 @@
+import os
 from typing import List
-
+from dotenv import load_dotenv
 class Settings:
     """
     Classe para centralizar as configurações da aplicação.
@@ -36,6 +37,7 @@ class Settings:
         r'\s{2,}\d+\s{2,}$',
         r'\b\d+\s*\|\s*\w+\b'
     ]
-
+    ELEVENLABS_API_KEY: str = os.getenv("ELEVENLABS_API_KEY")
+    ELEVENLABS_VOICE_ID: str = os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")
 # Instância única das configurações para ser importada em outros módulos
 settings = Settings()

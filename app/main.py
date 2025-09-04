@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.endpoints.pdf import router as pdf_router
+from app.api.v1.endpoints.tts import router as tts_router  # <-- IMPORTAR O NOVO ROUTER
 import logging
 
 # Configurar logging
@@ -33,3 +34,4 @@ async def read_root():
 # Inclui as rotas definidas no módulo de PDF
 # O prefixo /api/v1 ajuda a versionar a API
 app.include_router(pdf_router, prefix="/api/v1", tags=["PDF Segmentation"])
+app.include_router(tts_router, prefix="/api/v1/tts", tags=["Text-to-Speech"]) # <-- ADICIONAR O NOVO ROUTER
