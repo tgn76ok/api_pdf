@@ -15,16 +15,17 @@ class S3Service:
         Inicializa o cliente S3 usando as credenciais das configurações.
         """
         try:
-            if not all([settings.AWS_ACCESS_KEY_ID, settings.AWS_SECRET_ACCESS_KEY, settings.AWS_S3_BUCKET_NAME, settings.AWS_REGION]):
+            if not all([settings.ACCESS_KEY_ID, settings.SECRET_ACCESS_KEY, settings.S3_BUCKET_NAME, settings.S3_ENDPOINT_URL]):
                 raise ValueError("As credenciais e configurações da AWS não estão completas.")
 
             self.s3_client = boto3.client(
                 's3',
-                aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-                aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-                region_name=settings.AWS_REGION
+                endpoint_url=settings.S3_ENDPOINT_URL,
+                aws_access_key_id=settings.ACCESS_KEY_ID,
+                aws_secret_access_key=settings.SECRET_ACCESS_KEY,
+                # region_name=settings.REGION
             )
-            self.bucket_name = settings.AWS_S3_BUCKET_NAME
+            self.bucket_name = settings.S3_BUCKET_NAME
             logger.info("Cliente S3 inicializado com sucesso.")
         except ValueError as e:
             logger.error(e)

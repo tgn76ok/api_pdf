@@ -37,7 +37,15 @@ class Settings:
         r'\s{2,}\d+\s{2,}$',
         r'\b\d+\s*\|\s*\w+\b'
     ]
+    print("Carregando variáveis de ambiente do .env")
+    load_dotenv()  # Carrega as variáveis do ficheiro .env
+    ACCESS_KEY_ID: str = os.getenv("S3_ACCESS_KEY")
+    SECRET_ACCESS_KEY: str = os.getenv("S3_SECRET_KEY")
+    S3_BUCKET_NAME: str = os.getenv("S3_BUCKET_NAME")
+    S3_ENDPOINT_URL: str = os.getenv("S3_ENDPOINT_URL")
+    REGION: str = os.getenv("AWS_REGION", "us-east-1")
     ELEVENLABS_API_KEY: str = os.getenv("ELEVENLABS_API_KEY")
     ELEVENLABS_VOICE_ID: str = os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")
+
 # Instância única das configurações para ser importada em outros módulos
 settings = Settings()
