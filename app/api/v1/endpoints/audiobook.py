@@ -19,6 +19,14 @@ from app.services.s3_service import S3Service
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Path
+from sqlalchemy.orm import Session
+from app.core.database import get_db
+from app.crud import crud_document
+from app.services.audio_generation_service import AudioGenerationService
+
+from app.api.v1.schemas.document import Document as DocumentSchema
+
 # --- Injeção de Dependências ---
 # Esta abordagem permite que o FastAPI gerencie o ciclo de vida dos serviços.
 def get_audiobook_service() -> AudiobookGeneratorService:
@@ -70,3 +78,34 @@ async def create_audiobook_from_pdf(
     except Exception as e:
         logger.error(f"Erro inesperado ao processar {file.filename}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Ocorreu um erro interno no servidor.")
+    
+def get_audio_generation_service():
+    return AudioGenerationService(
+        elevenlabs_service=ElevenLabsService(),
+        s3_service=S3Service()
+    )
+
+@router.post("/generate-audio/{document_id}", response_model=DocumentSchema)
+async def generate_audio_for_document_endpoint(
+    background_tasks: BackgroundTasks,
+    document_id: int = Path(..., description="O ID do documento para o qual gerar áudio."),
+    db: Session = Depends(get_db),
+    service: AudioGenerationService = Depends(get_audio_generation_service)
+):
+    """
+    Inicia a geração de áudio em segundo plano para um documento existente.
+    """
+    db_document = crud_document.get_document(db, document_id)
+    if not db_document:
+        raise HTTPException(status_code=404, detail="Documento não encontrado.")
+
+    background_tasks.add_task(
+        service.generate_audio_for_document,
+        db=db,
+        document_id=document_id
+    )
+
+    logger.info(f"Tarefa de geração de áudio agendada para o documento ID: {document_id}.")
+    
+    # Retorna o estado atual do documento
+    return db_document

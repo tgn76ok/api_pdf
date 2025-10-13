@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.endpoints.pdf import router as pdf_router
 from app.api.v1.endpoints.tts import router as tts_router  # <-- IMPORTAR O NOVO ROUTER
 from app.api.v1.endpoints.audiobook import router as audiobook_router  # <-- IMPORTAR O NOVO ROUTER
+from app.api.v1.endpoints.extractText import router as extracttext_router  # <-- IMPORTAR O NOVO ROUTER
 import logging
 
 # Configurar logging
@@ -37,3 +38,4 @@ async def read_root():
 app.include_router(pdf_router, prefix="/api/v1/pdf", tags=["PDF Segmentation"])
 app.include_router(tts_router, prefix="/api/v1/tts", tags=["Text-to-Speech"]) # <-- ADICIONAR O NOVO ROUTER
 app.include_router(audiobook_router, prefix="/api/v1/audiobook", tags=["Audiobook Generation (Completo)"]) # NOVO
+app.include_router(extracttext_router, prefix="/api/v1/extracbook", tags=["Audiobook Generation (Completo)"]) # NOVO
