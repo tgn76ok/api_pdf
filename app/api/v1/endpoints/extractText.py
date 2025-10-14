@@ -19,7 +19,6 @@ def get_text_extraction_service():
 async def extract_text_from_pdf(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="Arquivo PDF para extração."),
-    segmentation_mode: str = Form("page", enum=["page", "chapter"]),
     book_title: str = Form(None, description="Título do livro."),
     db: Session = Depends(get_db),
     service: TextExtractionService = Depends(get_text_extraction_service)
@@ -44,7 +43,7 @@ async def extract_text_from_pdf(
         db=db,
         document_id=db_document.id,
         pdf_bytes=pdf_bytes,
-        segmentation_mode=segmentation_mode
+        segmentation_mode="page"
     )
     
     logger.info(f"Tarefa de extração de texto agendada para o documento '{title}' (ID: {db_document.id}).")

@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from datetime import datetime
 from typing import List, Optional
-
+from enum import Enum
 # Importa o schema do AudioSegment para poder aninhá-lo
 from .audio_segment import AudioSegment
 
@@ -45,3 +45,6 @@ class Document(DocumentBase):
         """
         orm_mode = True
 
+class SegmentationMode(str, Enum):
+    PAGE = "page"
+    CHAPTER = "chapter"

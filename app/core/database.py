@@ -25,7 +25,7 @@ SQLALCHEMY_DATABASE_URL = (
 # Nota: Certifique-se de que tem o driver do PostgreSQL instalado:
 # pip install psycopg2-binary
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
-
+print(f"Conectando ao banco de dados em {SQLALCHEMY_DATABASE_URL}")
 # Cada instância de SessionLocal será uma sessão de banco de dados.
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
