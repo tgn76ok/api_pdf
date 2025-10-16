@@ -1,3 +1,4 @@
+import uuid
 from pydantic import BaseModel
 from datetime import datetime
 from typing import List, Optional
@@ -12,7 +13,7 @@ class DocumentBase(BaseModel):
     """
     Schema base com os campos comuns que um documento sempre terá.
     """
-    original_filename: str
+    pdf_file_name: str
     title: Optional[str] = None
 
 
@@ -30,9 +31,9 @@ class Document(DocumentBase):
     relacionamentos com outros dados (como os segmentos de áudio).
     """
     id: int
-    owner_id: int
+    owner_id: uuid.UUID
     status: ProcessingStatus  # Garante que o status seja um dos valores do Enum
-    created_at: datetime
+    date_added: datetime
     
     # Aninha uma lista de schemas de AudioSegment, mostrando todos os
     # segmentos de áudio que pertencem a este documento.

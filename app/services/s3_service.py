@@ -1,8 +1,13 @@
+import time
 import boto3
 import logging
 from botocore.exceptions import NoCredentialsError, PartialCredentialsError, ClientError
+from requests import Session
 from app.core.config import settings
+from app.crud import crud_document
+from app.models.document import ProcessingStatus
 import io
+from app.core.database import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +74,11 @@ class S3Service:
             logger.error(f"Erro inesperado durante o upload para o S3: {e}")
             raise RuntimeError("Ocorreu uma falha desconhecida durante o upload do ficheiro.")
 
-    def get_file(self, filename: str) -> bytes:
+    def get_file(self, 
+        filename: str,
+        db: Session,
+        document_id: int,
+        ) -> bytes:
         """
         Obtém o conteúdo de um ficheiro do S3.
 
@@ -84,13 +93,18 @@ class S3Service:
             RuntimeError: Para outros erros de comunicação com o S3.
         """
         try:
-            response = self.s3_client.get_object(Bucket=self.bucket_name, Key=filename)
-            file_content = response['Body'].read()
+            # response = self.s3_client.get_object(Bucket=self.bucket_name, Key=filename)
+            response = self.s3_client.get_object(Bucket=self.bucket_name, Key="files/68c379a6-b268-4ca0-bc5f-633ce15777ff-livro.pdf")
+            file_content = response['Body']
+            file_content = file_content.read()
+  
             logger.info(f"Ficheiro '{filename}' obtido com sucesso do S3.")
             return file_content
         except ClientError as e:
             if e.response['Error']['Code'] == 'NoSuchKey':
                 logger.error(f"Ficheiro não encontrado no S3: {filename}")
+                crud_document.update_document_status(db, document_id, ProcessingStatus.FAILED)
+
                 raise FileNotFoundError(f"O ficheiro '{filename}' não foi encontrado no bucket S3.")
             else:
                 logger.error(f"Erro do cliente S3 ao obter o ficheiro '{filename}': {e}")

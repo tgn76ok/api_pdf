@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from typing import List, Dict, Any, Callable
 
 from app.services.pdf_segmenter import PDFSegmenterService
+from app.services.s3_service import S3Service
 from app.services.text_preprocessor_service import TextPreprocessorService
 from app.crud import crud_document, crud_audio_segment
 from app.models.document import ProcessingStatus
@@ -42,7 +43,8 @@ class TextExtractionService:
         units = []
         try:
             # 3. Gerenciamento de Recursos com 'with'
-            with fitz.open(stream=pdf_bytes, filetype="pdf") as pdf_document:
+            doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+            with doc as pdf_document:
                 for page_num, page in enumerate(pdf_document):
                     text = page.get_text("text").strip()
                     if text:
@@ -73,23 +75,31 @@ class TextExtractionService:
         self,
         db: Session,
         *,
-        pdf_bytes: bytes,
+        pdf_file_key: str,
         document_id: int,
         segmentation_mode: SegmentationMode, # 4. Usando o Enum
     ):
         """Orquestra o processo de extração e armazenamento de texto."""
         try:
             logger.info(
-                f"A iniciar extração de texto para o documento ID: {document_id} com modo '{segmentation_mode.value}'."
+                f"A iniciar extração de texto para o documento ID: {document_id} com modo page."
             )
             crud_document.update_document_status(db, document_id, ProcessingStatus.PROCESSING)
+            pdf = S3Service()
+            pdf_bytes = pdf.get_file(filename=pdf_file_key,db=db,document_id=document_id)
+            
+            print('=-='*20)  # Debugging output
+            print(pdf_bytes)  # Debugging output
+            print('=-='*20)  # Debugging output
 
-            # Seleciona a estratégia de segmentação a partir do dicionário
             segment_strategy = self._segmentation_strategies.get(segmentation_mode)
             if not segment_strategy:
                 raise ValueError(f"Modo de segmentação desconhecido: {segmentation_mode}")
-            
+            print('=-='*20)  # Debugging output
+            print(pdf_bytes)  # Debugging output
+            print('=-='*20) 
             text_units = segment_strategy(pdf_bytes)
+             # Debugging output
 
             if not text_units:
                 logger.warning(f"Nenhum texto encontrado para o documento ID: {document_id}.")

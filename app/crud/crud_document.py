@@ -6,6 +6,7 @@ from app.models.document import Document, ProcessingStatus
 from app.models.audio_segment import AudioSegment
 from app.api.v1.schemas.document import DocumentCreate
 
+
 def create_document(db: Session, document: DocumentCreate, owner_id: int) -> Document:
     """
     Cria um novo registo de documento na base de dados.
@@ -48,10 +49,11 @@ def get_all_documents(
     """
     query = db.query(Document)
     
+    print(status)
     if status:
         query = query.filter(Document.status == status)
     
-    return query.order_by(Document.created_at.desc()).offset(skip).limit(limit).all()
+    return query.order_by(Document.date_added.desc()).offset(skip).limit(limit).all()
 
 
 def update_document_status(
@@ -138,7 +140,7 @@ def get_documents_by_owner(
     return (
         db.query(Document)
         .filter(Document.owner_id == owner_id)
-        .order_by(Document.created_at.desc())
+        .order_by(Document.date_added.desc())
         .offset(skip)
         .limit(limit)
         .all()

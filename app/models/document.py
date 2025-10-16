@@ -1,22 +1,30 @@
 # app/models/document.py
 import enum
-from sqlalchemy import String, DateTime, ForeignKey, Enum as SQLAlchemyEnum
+import uuid
+
+from sqlalchemy import String, DateTime, ForeignKey, Enum as SQLAlchemyEnum , Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
-from .base import Base
+from sqlalchemy.dialects.postgresql import UUID 
 from typing import List
 from datetime import datetime
 
+from .base import Base
 
 class ProcessingStatus(str, enum.Enum):
     """
     Enum para os estados de processamento de um documento.
     """
-    PENDING = "pending"
-    TEXT_EXTRACTED = "text_extracted"
-    PROCESSING = "processing"
-    COMPLETED = "completed"
-    FAILED = "failed"
+    PENDING = "PENDING"
+    TEXT_EXTRACTED = "TEXT_EXTRACTED"
+    Approve = "Approve"
+    IN_ANALYSIS = "IN_ANALYSIS"
+    REJECTED = "REJECTED"
+    PROCESSING = "PROCESSING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    ARCHIVED = "ARCHIVED"
+    AVAILABLE = "AVAILABLE"
 
 
 class Document(Base):
@@ -27,18 +35,27 @@ class Document(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(300), nullable=True)
-    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
-    
+    pdfUrl: Mapped[str] = mapped_column(String(255), nullable=False)
+    cover_file_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    coverImage: Mapped[str] = mapped_column(String(255), nullable=False)
+    page_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    pdf_file_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    pdf_file_name: Mapped[str] = mapped_column(String(255), nullable=False)
+
     status: Mapped[ProcessingStatus] = mapped_column(
         SQLAlchemyEnum(ProcessingStatus, name="processing_status_enum"), 
         nullable=False, 
         default=ProcessingStatus.PENDING
     )
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    date_added: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     
     # Relacionamento com a tabela 'users'
-    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+            UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="CASCADE"), 
+            nullable=False
+        )
     owner: Mapped["User"] = relationship(back_populates="books")
 
     # Relacionamento com a tabela 'audio_segments'

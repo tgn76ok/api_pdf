@@ -16,4 +16,4 @@ class User(Base):
         default=uuid.uuid4  # Gera um novo UUID para cada novo usuário
     )
     # ---------------------
-    documents: Mapped[List["books"]] = relationship(back_populates="owner")
+    books: Mapped[List["Document"]] = relationship(back_populates="owner")
