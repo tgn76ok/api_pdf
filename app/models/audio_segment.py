@@ -1,29 +1,36 @@
-from sqlalchemy import String, Integer, ForeignKey, Text
+from sqlalchemy import String, Integer, ForeignKey, Text, BigInteger
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base
+
 
 class AudioSegment(Base):
     """
     Modelo SQLAlchemy que representa a tabela 'audio_segments'.
+    ⚠️ IMPORTANTE: A FK no banco se chama 'book_id', não 'document_id'!
     """
     __tablename__ = "audio_segments"
     
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
     
-    # Garante que a chave estrangeira aponta para a tabela 'documents'
-    document_id: Mapped[int] = mapped_column(ForeignKey("books.id"), nullable=False)
-    document: Mapped["Document"] = relationship(back_populates="segments")
+    # ===== CORRIGIDO: Usar book_id =====
+    book_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("books.id", ondelete="CASCADE"),
+        nullable=False
+    )
     
+    # ===== RELACIONAMENTO =====
+    document: Mapped["Document"] = relationship(
+        back_populates="segments",
+        foreign_keys=[book_id]
+    )
+    
+    # ===== CAMPOS DO SEGMENTO =====
     segment_index: Mapped[int] = mapped_column(Integer, nullable=False)
     title: Mapped[str] = mapped_column(String(300), nullable=False)
-    text_content: Mapped[str] = mapped_column(Text, nullable=True)
+    text_content: Mapped[str | None] = mapped_column(Text, nullable=True)
     
-    # --- CORREÇÃO: Removido o campo 's3_url' que não existe na base de dados ---
-    # s3_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    
-    # Mantidos os outros campos de áudio que devem existir na BD
-    audio_file_key: Mapped[str | None] = mapped_column(String(512),  nullable=True)
-    audio_url: Mapped[str | None] = mapped_column(String(512),  nullable=True)
-    audio_file_name: Mapped[str | None] = mapped_column(String(255),  nullable=True)
-    audio_file_size: Mapped[str | None] = mapped_column(String(255),  nullable=True)
+    # ===== CAMPOS DE ÁUDIO =====
+    audio_file_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    audio_file_size: Mapped[str | None] = mapped_column(BigInteger, nullable=True)
 

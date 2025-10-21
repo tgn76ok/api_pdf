@@ -31,6 +31,7 @@ class S3Service:
                 # region_name=settings.REGION
             )
             self.bucket_name = settings.S3_BUCKET_NAME
+            print(self.bucket_name)
             logger.info("Cliente S3 inicializado com sucesso.")
         except ValueError as e:
             logger.error(e)
@@ -93,8 +94,10 @@ class S3Service:
             RuntimeError: Para outros erros de comunicação com o S3.
         """
         try:
+            print(filename)
+            print(self.bucket_name)
             # response = self.s3_client.get_object(Bucket=self.bucket_name, Key=filename)
-            response = self.s3_client.get_object(Bucket=self.bucket_name, Key="files/68c379a6-b268-4ca0-bc5f-633ce15777ff-livro.pdf")
+            response = self.s3_client.get_object(Bucket=self.bucket_name, Key=filename)
             file_content = response['Body']
             file_content = file_content.read()
   

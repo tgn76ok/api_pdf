@@ -67,7 +67,6 @@ async def extract_text_from_existing_document(
         raise HTTPException(status_code=404, detail="Livro não encontrado com o ID fornecido.")
     if not db_document.pdf_file_key:
         raise HTTPException(status_code=400, detail="Documento não possui uma chave de ficheiro PDF associada para a extração.")
-
     # 2. Adiciona a tarefa de extração para ser executada em segundo plano.
     background_tasks.add_task(
         service.extract_and_save_text,

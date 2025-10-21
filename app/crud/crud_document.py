@@ -53,7 +53,7 @@ def get_all_documents(
     if status:
         query = query.filter(Document.status == status)
     
-    return query.order_by(Document.date_added.desc()).offset(skip).limit(limit).all()
+    return query.order_by(Document.created_at.desc()).offset(skip).limit(limit).all()
 
 
 def update_document_status(
@@ -67,6 +67,22 @@ def update_document_status(
     db_document = get_document(db, document_id)
     if db_document:
         db_document.status = status
+        db.commit()
+        db.refresh(db_document)
+    return db_document
+
+
+def update_document_countPage(
+    db: Session, 
+    document_id: int, 
+    totalPage: int
+) -> Optional[Document]:
+    """
+    Atualiza o estado de processamento de um documento.
+    """
+    db_document = get_document(db, document_id)
+    if db_document:
+        db_document.page_count = totalPage
         db.commit()
         db.refresh(db_document)
     return db_document
@@ -140,7 +156,7 @@ def get_documents_by_owner(
     return (
         db.query(Document)
         .filter(Document.owner_id == owner_id)
-        .order_by(Document.date_added.desc())
+        .order_by(Document.created_at.desc())
         .offset(skip)
         .limit(limit)
         .all()

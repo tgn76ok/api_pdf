@@ -1,51 +1,59 @@
 import uuid
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 from typing import List, Optional
 from enum import Enum
-# Importa o schema do AudioSegment para poder aninhá-lo
-from .audio_segment import AudioSegment
 
-# Importa o Enum do modelo para garantir que o campo 'status' seja sempre um valor válido
+from .audio_segment import AudioSegment
 from app.models.document import ProcessingStatus
 
+
+class SegmentationMode(str, Enum):
+    """Modos de segmentação disponíveis."""
+    PAGE = "page"
+    CHAPTER = "chapter"
+
+
 class DocumentBase(BaseModel):
-    """
-    Schema base com os campos comuns que um documento sempre terá.
-    """
-    pdf_file_name: str
+    """Schema base - SOMENTE campos que o usuário pode fornecer."""
     title: Optional[str] = None
 
 
 class DocumentCreate(DocumentBase):
-    """
-    Schema usado especificamente para validar os dados ao criar um novo documento.
-    Neste caso, é igual ao base, mas poderia ter campos adicionais no futuro.
-    """
+    """Schema para criar um documento."""
     pass
 
-class Document(DocumentBase):
+
+class Document(BaseModel):
     """
-    Schema completo usado para retornar um documento pela API.
-    Inclui campos gerados pela base de dados (como id, created_at) e
-    relacionamentos com outros dados (como os segmentos de áudio).
+    Schema completo para retornar um documento pela API.
+    ⚠️ Corresponde EXATAMENTE aos campos do TypeScript Book entity.
     """
+    # ===== CAMPOS OBRIGATÓRIOS =====
     id: int
     owner_id: uuid.UUID
-    status: ProcessingStatus  # Garante que o status seja um dos valores do Enum
-    date_added: datetime
+    status: ProcessingStatus
+    created_at: datetime
     
-    # Aninha uma lista de schemas de AudioSegment, mostrando todos os
-    # segmentos de áudio que pertencem a este documento.
+    # ===== CAMPOS OPCIONAIS =====
+    title: str
+    description: Optional[str] = None
+    publication_date: Optional[datetime] = None
+    volume_edition: Optional[str] = None
+    visit_count: int = 0
+    language: str
+    visible: bool = False
+    is_audio: bool = False
+    page_count: int = 0
+    
+    # ===== CAMPOS DE ARQUIVOS =====
+    cover_file_key: Optional[str] = None
+    pdf_file_key: Optional[str] = None
+    cover_image_url: Optional[str] = None
+    pdf_image_url: Optional[str] = None
+    
+    # ===== RELACIONAMENTOS =====
     segments: List[AudioSegment] = []
 
-    class Config:
-        """
-        Configuração do Pydantic que permite que ele funcione diretamente
-        com os modelos do SQLAlchemy (ORM), convertendo-os para JSON.
-        """
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
-class SegmentationMode(str, Enum):
-    PAGE = "page"
-    CHAPTER = "chapter"

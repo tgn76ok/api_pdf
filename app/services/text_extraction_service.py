@@ -11,10 +11,10 @@ from app.services.text_preprocessor_service import TextPreprocessorService
 from app.crud import crud_document, crud_audio_segment
 from app.models.document import ProcessingStatus
 from app.api.v1.schemas.audio_segment import AudioSegmentCreate
-# Supondo que você criou o Enum
-from app.api.v1.schemas.document import SegmentationMode 
+from app.api.v1.schemas.document import SegmentationMode
 
 logger = logging.getLogger(__name__)
+
 
 class TextExtractionService:
     """
@@ -27,11 +27,11 @@ class TextExtractionService:
         pdf_segmenter: PDFSegmenterService,
         preprocessor: TextPreprocessorService,
     ):
-        # 1. Injeção de Dependência: recebemos as instâncias em vez de criá-las.
+        # Injeção de Dependência: recebemos as instâncias em vez de criá-las.
         self.pdf_segmenter = pdf_segmenter
         self.preprocessor = preprocessor
-        
-        # 2. Padrão Strategy: Mapeia o modo de segmentação para a função correspondente.
+
+        # Padrão Strategy: mapeia modo de segmentação à função correspondente.
         self._segmentation_strategies: Dict[SegmentationMode, Callable] = {
             SegmentationMode.PAGE: self._segment_by_page,
             SegmentationMode.CHAPTER: self._segment_by_chapter,
@@ -39,14 +39,14 @@ class TextExtractionService:
 
     def _segment_by_page(self, pdf_bytes: bytes) -> List[Dict[str, Any]]:
         """Usa o PyMuPDF para dividir o texto por página."""
-        logger.info("A segmentar por páginas...")
-        units = []
+        logger.info("Segmentando por páginas...")
+        units: List[Dict[str, Any]] = []
         try:
-            # 3. Gerenciamento de Recursos com 'with'
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
             with doc as pdf_document:
                 for page_num, page in enumerate(pdf_document):
-                    text = page.get_text("text").strip()
+                    raw_text = page.get_text("text")
+                    text = raw_text.strip() if raw_text else ""
                     if text:
                         units.append({
                             "index": page_num + 1,
@@ -60,15 +60,16 @@ class TextExtractionService:
 
     def _segment_by_chapter(self, pdf_bytes: bytes) -> List[Dict[str, Any]]:
         """Usa o PDFSegmenterService para dividir o texto em capítulos."""
-        logger.info("A segmentar por capítulos...")
+        logger.info("Segmentando por capítulos...")
         result = self.pdf_segmenter.segment_pdf(pdf_bytes)
+        chapters = result.get("chapters", [])
         return [
             {
                 "index": i + 1,
                 "title": chap["title"],
                 "content": chap["content"],
             }
-            for i, chap in enumerate(result.get("chapters", []))
+            for i, chap in enumerate(chapters)
         ]
 
     def extract_and_save_text(
@@ -77,51 +78,60 @@ class TextExtractionService:
         *,
         pdf_file_key: str,
         document_id: int,
-        segmentation_mode: SegmentationMode, # 4. Usando o Enum
+        segmentation_mode: SegmentationMode,
     ):
-        """Orquestra o processo de extração e armazenamento de texto."""
+        """
+        Orquestra o processo de extração e armazenamento de texto.
+        Atualiza o status do documento em cada etapa.
+        """
         try:
             logger.info(
-                f"A iniciar extração de texto para o documento ID: {document_id} com modo page."
+                f"Iniciando extração de texto para documento ID {document_id} com modo {segmentation_mode}."
             )
             crud_document.update_document_status(db, document_id, ProcessingStatus.PROCESSING)
-            pdf = S3Service()
-            pdf_bytes = pdf.get_file(filename=pdf_file_key,db=db,document_id=document_id)
-            
-            print('=-='*20)  # Debugging output
-            print(pdf_bytes)  # Debugging output
-            print('=-='*20)  # Debugging output
 
+            # Busca o PDF no S3
+            s3 = S3Service()
+            pdf_bytes = s3.get_file(filename=pdf_file_key, db=db, document_id=document_id)
+
+            # Seleciona a estratégia de segmentação
             segment_strategy = self._segmentation_strategies.get(segmentation_mode)
             if not segment_strategy:
                 raise ValueError(f"Modo de segmentação desconhecido: {segmentation_mode}")
-            print('=-='*20)  # Debugging output
-            print(pdf_bytes)  # Debugging output
-            print('=-='*20) 
+
             text_units = segment_strategy(pdf_bytes)
-             # Debugging output
 
             if not text_units:
-                logger.warning(f"Nenhum texto encontrado para o documento ID: {document_id}.")
+                logger.warning(f"Nenhum texto extraído para documento ID {document_id}.")
                 crud_document.update_document_status(db, document_id, ProcessingStatus.FAILED)
                 return
 
-            segments_to_create = [
-                AudioSegmentCreate(
-                    segment_index=unit["index"],
-                    title=unit["title"],
-                    text_content=self.preprocessor.clean_text_for_tts(unit["content"]),
+            # Limpa o texto e prepara AudioSegmentCreate para cada unidade
+            segments_to_create: List[AudioSegmentCreate] = []
+            for unit in text_units:
+                cleaned = self.preprocessor.clean_text_for_tts(unit["content"])
+                segments_to_create.append(
+                    AudioSegmentCreate(
+                        segment_index=unit["index"],
+                        title=unit["title"],
+                        text_content=cleaned,
+                    )
                 )
-                for unit in text_units
-            ]
-
+            crud_audio_segment.delete_audio_segments_by_document(db, document_id)
+            # Cria registros de segmentos de áudio em batch
             crud_audio_segment.bulk_create_audio_segments(
                 db, segments_in=segments_to_create, document_id=document_id
             )
+            # crud_document.update_document_countPage(db, document_id, ProcessingStatus.PROCESSING)
+            
 
+            # Atualiza status para TEXT_EXTRACTED
             crud_document.update_document_status(db, document_id, ProcessingStatus.TEXT_EXTRACTED)
-            logger.info(f"Extração de texto para o documento ID: {document_id} concluída com sucesso.")
+            logger.info(f"Extração de texto concluída para documento ID {document_id}.")
 
         except Exception as e:
-            logger.error(f"Erro durante a extração de texto para o documento ID {document_id}: {e}", exc_info=True)
+            logger.error(
+                f"Erro na extração de texto para documento ID {document_id}: {e}",
+                exc_info=True
+            )
             crud_document.update_document_status(db, document_id, ProcessingStatus.FAILED)
