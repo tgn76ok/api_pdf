@@ -2,12 +2,11 @@ import time
 import boto3
 import logging
 from botocore.exceptions import NoCredentialsError, PartialCredentialsError, ClientError
-from requests import Session
+from typing import Tuple
 from app.core.config import settings
 from app.crud import crud_document
 from app.models.document import ProcessingStatus
 import io
-from app.core.database import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +27,8 @@ class S3Service:
                 endpoint_url=settings.S3_ENDPOINT_URL,
                 aws_access_key_id=settings.ACCESS_KEY_ID,
                 aws_secret_access_key=settings.SECRET_ACCESS_KEY,
-                # region_name=settings.REGION
             )
             self.bucket_name = settings.S3_BUCKET_NAME
-            print(self.bucket_name)
             logger.info("Cliente S3 inicializado com sucesso.")
         except ValueError as e:
             logger.error(e)
@@ -43,7 +40,7 @@ class S3Service:
             logger.error(f"Erro inesperado ao inicializar o cliente S3: {e}")
             raise RuntimeError("Falha na inicialização do serviço S3.")
 
-    def upload_audio(self, audio_bytes: bytes, filename: str) -> str:
+    def upload_audio(self, audio_bytes: bytes, filename: str) -> Tuple[str, str]:
         """
         Faz o upload de bytes de um ficheiro de áudio para o S3 e torna-o público.
 
@@ -52,10 +49,14 @@ class S3Service:
             filename: O nome do ficheiro (caminho) a ser guardado no bucket.
 
         Returns:
-            A URL pública do ficheiro carregado.
+            Tupla com (audio_file_key, public_url):
+                - audio_file_key: A chave/caminho do arquivo no bucket S3
+                - public_url: A URL pública do ficheiro carregado (gerada pelo boto3)
         """
         try:
             file_obj = io.BytesIO(audio_bytes)
+            
+            # Upload do arquivo para o S3
             self.s3_client.upload_fileobj(
                 file_obj,
                 self.bucket_name,
@@ -63,11 +64,30 @@ class S3Service:
                 ExtraArgs={'ContentType': 'audio/mpeg', 'ACL': 'public-read'}
             )
             
-            # Constrói a URL pública do ficheiro
-            url = f"https://{self.bucket_name}.s3.{settings.AWS_REGION}.amazonaws.com/{filename}"
+            # A chave é o próprio filename (caminho no bucket)
+            audio_file_key = filename
             
-            logger.info(f"Ficheiro '{filename}' carregado para o S3. URL: {url}")
-            return url
+            # Gera a URL pública usando o método do boto3
+            # Isso garante que a URL seja gerada corretamente pelo próprio SDK
+            public_url = self.s3_client.generate_presigned_url(
+                'get_object',
+                Params={
+                    'Bucket': self.bucket_name,
+                    'Key': filename
+                },
+                ExpiresIn=0  # 0 significa URL sem expiração (para objetos públicos)
+            )
+            
+            # Remove os parâmetros de query se existirem (para URLs públicas limpas)
+            if '?' in public_url:
+                public_url = public_url.split('?')[0]
+            
+            logger.info(f"Ficheiro '{filename}' carregado para o S3.")
+            logger.info(f"URL pública: {public_url}")
+            logger.info(f"Chave do arquivo: {audio_file_key}")
+            
+            return audio_file_key, public_url
+            
         except ClientError as e:
             logger.error(f"Erro do cliente S3 ao fazer o upload: {e}")
             raise RuntimeError(f"Não foi possível carregar o ficheiro para o S3. Verifique as permissões do bucket.")
@@ -75,16 +95,14 @@ class S3Service:
             logger.error(f"Erro inesperado durante o upload para o S3: {e}")
             raise RuntimeError("Ocorreu uma falha desconhecida durante o upload do ficheiro.")
 
-    def get_file(self, 
-        filename: str,
-        db: Session,
-        document_id: int,
-        ) -> bytes:
+    def get_file(self, filename: str, db, document_id: int) -> bytes:
         """
         Obtém o conteúdo de um ficheiro do S3.
 
         Args:
             filename: O nome do ficheiro (caminho/chave) no bucket.
+            db: Sessão do banco de dados
+            document_id: ID do documento
 
         Returns:
             O conteúdo do ficheiro em bytes.
@@ -94,20 +112,18 @@ class S3Service:
             RuntimeError: Para outros erros de comunicação com o S3.
         """
         try:
-            print(filename)
-            print(self.bucket_name)
-            # response = self.s3_client.get_object(Bucket=self.bucket_name, Key=filename)
+            logger.info(f"Buscando arquivo '{filename}' no bucket '{self.bucket_name}'")
+            
             response = self.s3_client.get_object(Bucket=self.bucket_name, Key=filename)
-            file_content = response['Body']
-            file_content = file_content.read()
+            file_content = response['Body'].read()
   
             logger.info(f"Ficheiro '{filename}' obtido com sucesso do S3.")
             return file_content
+            
         except ClientError as e:
             if e.response['Error']['Code'] == 'NoSuchKey':
                 logger.error(f"Ficheiro não encontrado no S3: {filename}")
                 crud_document.update_document_status(db, document_id, ProcessingStatus.FAILED)
-
                 raise FileNotFoundError(f"O ficheiro '{filename}' não foi encontrado no bucket S3.")
             else:
                 logger.error(f"Erro do cliente S3 ao obter o ficheiro '{filename}': {e}")
@@ -115,4 +131,3 @@ class S3Service:
         except Exception as e:
             logger.error(f"Erro inesperado ao obter o ficheiro '{filename}' do S3: {e}")
             raise RuntimeError("Ocorreu uma falha desconhecida ao obter o ficheiro.")
-

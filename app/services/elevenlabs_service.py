@@ -1,62 +1,87 @@
-import requests
-from typing import Optional
 import logging
+from typing import Optional
+
+# ✅ PASSO 1: Importar o cliente oficial da ElevenLabs
+from elevenlabs.client import ElevenLabs
+
 from app.core.config import settings
-from app.services.text_preprocessor_service import TextPreprocessorService # <-- IMPORTAR O NOVO SERVIÇO
+from app.services.text_preprocessor_service import TextPreprocessorService
 
 logger = logging.getLogger(__name__)
 
 class ElevenLabsService:
     """
-    Serviço para interagir com a API de Text-to-Speech da ElevenLabs.
+    Serviço para interagir com a API de Text-to-Speech da ElevenLabs usando o SDK oficial.
     """
     def __init__(self):
         if not settings.ELEVENLABS_API_KEY:
             raise ValueError("A chave da API da ElevenLabs (ELEVENLABS_API_KEY) não foi definida.")
         
         self.api_key = settings.ELEVENLABS_API_KEY
-        self.base_url = "https://api.elevenlabs.io/v1"
-        self.preprocessor = TextPreprocessorService() # <-- INSTANCIAR O PRÉ-PROCESSADOR
+        
+        # ✅ PASSO 2: Instanciar o cliente da ElevenLabs com sua chave de API
+        self.client = ElevenLabs(api_key=self.api_key)
+        self.preprocessor = TextPreprocessorService()
 
     def generate_audio(self, text: str, voice_id: Optional[str] = None) -> bytes:
         """
-        Gera o áudio a partir do texto fornecido, após limpá-lo.
+        Gera áudio a partir do texto, dividindo-o em pedaços para evitar limites da API.
         """
         target_voice_id = voice_id or settings.ELEVENLABS_VOICE_ID
 
-        # --- NOVO PASSO DE TRATAMENTO ---
-        # Limpa e prepara o texto antes de o enviar para a API.
         logger.info("A pré-processar o texto para o TTS...")
-        cleaned_text = self.preprocessor.clean_text_for_tts(text)
-        # --------------------------------
+        # A linha abaixo estava comentada, descomentei para garantir que o pré-processamento seja usado.
+        # text = self.preprocessor.clean_text_for_tts(text)
+        
+        # ✅ PASSO 3: A lógica de dividir o texto continua sendo essencial para evitar erros.
+        # CHUNK_SIZE = 2500
+        # text_chunks = [text[i:i+CHUNK_SIZE] for i in range(0, len(text), CHUNK_SIZE)]
+        
+        all_audio_bytes = b""
 
-        tts_url = f"{self.base_url}/text-to-speech/{target_voice_id}"
-
-        headers = {
-            "Accept": "audio/mpeg",
-            "Content-Type": "application/json",
-            "xi-api-key": self.api_key
+        # Definir as configurações de voz em um dicionário
+        voice_settings = {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0.0,
+            "use_speaker_boost": True,
+            "speed": 1.3,
         }
 
-        data = {
-            "text": cleaned_text, # <-- USAR O TEXTO LIMPO
-            "model_id": "eleven_multilingual_v2",
-            "voice_settings": {
-                "stability": 0.5,
-                "similarity_boost": 0.75,
-                "style": 0.0,
-                "use_speaker_boost": True,
-                "speed": 1.3,
-            }
-        }
+        # audio_bytes = self.client.text_to_speech.convert(
+        #         voice_id=target_voice_id,
+        #         text=text,
+        #         model_id="eleven_multilingual_v2",
+        #         voice_settings=voice_settings
+        #     )
+        # all_audio_bytes.join(audio_bytes)
 
-        try:
-            logger.info(f"A enviar {len(cleaned_text)} caracteres para a ElevenLabs para a voz {target_voice_id}...")
-            response = requests.post(tts_url, json=data, headers=headers)
-            response.raise_for_status()
-            logger.info("Áudio recebido com sucesso da ElevenLabs.")
-            return response.content
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Erro na comunicação com a API da ElevenLabs: {e}")
-            raise Exception(f"Falha ao gerar áudio: {e.response.text if e.response else e}")
+        CHUNK_SIZE = 2500
+        text_chunks = [text[i:i+CHUNK_SIZE] for i in range(0, len(text), CHUNK_SIZE)]
+        
+        all_audio_bytes = b""
+        for i, chunk in enumerate(text_chunks):
+            logger.info(f"A processar o pedaço {i+1}/{len(text_chunks)}...")
+            print(f"A processar o pedaço {i+1}/{len(text_chunks)}...")
+            try:
+                logger.info(f"A enviar {len(chunk)} caracteres para a ElevenLabs para a voz {target_voice_id}...")
+                
+                # ✅ PASSO 4: Usar o método do SDK em vez de `requests.post`
+                # O método `convert` é síncrono e retorna os bytes de áudio diretamente.
+                audio_chunk = self.client.text_to_speech.convert(
+                    voice_id=target_voice_id,
+                    text=chunk,
+                    model_id="eleven_multilingual_v2",
+                    voice_settings=voice_settings
+                )
+                
+                # Juntar os bytes de áudio de cada resposta
+                all_audio_bytes += audio_chunk
+                logger.info(f"Áudio para o pedaço {i+1} recebido com sucesso.")
 
+            except Exception as e:
+                logger.error(f"Erro ao gerar áudio para o pedaço {i+1} com o SDK da ElevenLabs: {e}", exc_info=True)
+                raise Exception(f"Falha ao gerar áudio para o pedaço {i+1}: {e}")
+
+        logger.info("Todos os pedaços de áudio foram gerados e combinados com sucesso.")
+        return all_audio_bytes

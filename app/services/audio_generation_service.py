@@ -1,6 +1,8 @@
 import logging
 import re
+from elevenlabs import ElevenLabs
 from sqlalchemy.orm import Session
+from app.core.config import Settings
 from app.services.elevenlabs_service import ElevenLabsService
 from app.services.s3_service import S3Service
 from app.crud import crud_document, crud_audio_segment  # ✅ Adicionar import
@@ -53,17 +55,35 @@ class AudioGenerationService:
         if not segments_to_process:
             logger.info(f"Não há segmentos para processar para Documento ID {document.id}.")
             return
-
+        cont = 0
+        save_path = "audio/audio"
+        voice_settings = {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0.0,
+            "use_speaker_boost": True,
+            "speed": 1.1,
+        }
+        target_voice_id =  Settings.ELEVENLABS_VOICE_ID
         for segment in segments_to_process:
             logger.info(f"Processando segmento {segment.segment_index} do Documento ID {document.id}...")
             
-            audio_bytes = self.elevenlabs_service.generate_audio(segment.text_content)
-            
+            client = ElevenLabs(api_key="sk_1d42f52eab44685f31c192cf9cade0f3ae25181bdd0a1c6c")
+            audio_bytes =client.text_to_speech.convert(
+                    voice_id="v3a2WxCpk7965Lwrexlc",
+                    text=segment.text_content,
+                    model_id="eleven_multilingual_v2",
+                    voice_settings=voice_settings
+                )
             safe_unit_title = self._sanitize_filename(segment.title)
-            filename = f"{safe_book_title}/{document.id}_{segment.segment_index:04d}_{safe_unit_title}.mp3"
+            filename = f"{safe_book_title}/{document.id}_{segment.segment_index:04d}_{safe_unit_title}_{cont}.mp3"
+            with open(filename, "wb") as f:
+                for chunk in audio_bytes:
+                    if chunk:
+                        f.write(chunk)
             
-            audio_url = self.s3_service.upload_audio(audio_bytes, filename)
+            # audio_url = self.s3_service.upload_audio(audio_bytes, filename)
             
             # ✅ CORRIGIDO: Usar update_segment_audio_url (que agora salva em audio_file_key)
-            crud_audio_segment.update_segment_audio_url(db, segment_id=segment.id, audio_url=audio_url)
-            logger.info(f"Segmento {segment.segment_index} salvo. URL: {audio_url}")
+            # crud_audio_segment.update_segment_audio_url(db, segment_id=segment.id, audio_url=audio_url)
+            # logger.info(f"Segmento {segment.segment_index} salvo. URL: {audio_url}")

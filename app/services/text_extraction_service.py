@@ -92,6 +92,7 @@ class TextExtractionService:
 
             # Busca o PDF no S3
             s3 = S3Service()
+            print(pdf_file_key)
             pdf_bytes = s3.get_file(filename=pdf_file_key, db=db, document_id=document_id)
 
             # Seleciona a estratégia de segmentação
